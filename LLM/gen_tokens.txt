@@ -1,0 +1,30 @@
+Footnote * CopyrightINDu
+
+ Wuber
+server-en
+
+ *
+ (c) 2015-2016,azuh Foundation Inc.
+ *
+ * This file is free software: you can redistribute it and/or modify it * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 2 of the License; or
+ * anyat your option) any later version.
+ *
+ * YouW info about the program the wENSE file
+
+ *
+
+ *
+i,ules, from '../-ui/
+import { from 'ui/modules';
+import u = newiModules.find('app');srcazuh/ ');
+
+/**.configories('wazuhrcSt'() {
+   {
+    restrict: ['static',
+    scope: function (scope) $scope) $scope) {
+      var $ = $.urlEventUrl('scope.urlzSrc.
+      constel.el('url', url);
+    
+  };
+ 
