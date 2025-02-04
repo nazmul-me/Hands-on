@@ -3,24 +3,29 @@ import transformers
 import torch
 from torch.utils.data import DataLoader, Dataset
 import numpy as np
+import os
 import json
-import codebleu
 from codebleu import calc_codebleu
 
+model_type = "4bit" # 4bit 8bit org dynamic
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+if model_type == "dynamic":
+    device = "cpu"
 
 def loadData(filePath):
     with open(filePath, 'r') as f:
         jsondata = json.load(f)
 
-    data = jsondata['member']
-    data.extend(jsondata['nonmember'])
+    # data = jsondata['member']
+    data = jsondata['nonmember']
+    # data.extend(jsondata['nonmember'])
     return data
 
 filePath = "raw_data.json"
 data = loadData(filePath=filePath)
 # Load model and tokenizer
-model_name = "EleutherAI/gpt-neo-125m"
+# // 70M, 160M, 410M, 1B, 1.4B, 2.8B, 6.9B
+model_name = "EleutherAI/pythia-6.9b"
 
 def loadModel(model_name, type):
     if type =="4bit":
@@ -41,31 +46,25 @@ def loadModel(model_name, type):
         model_copy = AutoModelForCausalLM.from_pretrained(model_name, device_map=device)
         model = torch.quantization.quantize_dynamic(
             model_copy, {torch.nn.Linear}, dtype=torch.qint8)
-        print("Dynamic quantization complete\n")
     else:
         model = AutoModelForCausalLM.from_pretrained(model_name, device_map=device)
     return model
 
-model = loadModel(model_name=model_name, type='org') # 4bit 8bit org dynamic
-model.eval()
+model = loadModel(model_name=model_name, type=model_type)
 tokenizer = AutoTokenizer.from_pretrained(model_name)
 if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 print(len(data))
-
+model.eval()
 res = []
-for d in data[0:1900]:
-    prompt = d[:200]
-    inputs = tokenizer(prompt, return_tensors="pt", padding=True).to(device)
-    outputs = model.generate(**inputs, num_return_sequences=1, max_length=1024)
-    generated_code = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    print(d)
-    print("---------------------------------------")
-    print(generated_code)
-
+for d in data:
+    inputs = tokenizer(d, return_tensors="pt", truncation=True, padding=True).to(device)
+    outputs = model(**inputs, labels=inputs["input_ids"])
+    logits = outputs.logits
+    predicted_token_ids = torch.argmax(logits, dim=-1)
+    generated_code = tokenizer.decode(predicted_token_ids[0], skip_special_tokens=True)
     result = calc_codebleu([d], [generated_code], lang="python", weights=(0.25, 0.25, 0.25, 0.25), tokenizer=tokenizer)
     res.append(result)
-    break
 print(len(res))
 averages = {key: 0 for key in res[0].keys()}
 for entry in res:
@@ -74,6 +73,9 @@ for entry in res:
 
 averages = {key: value / len(res) for key, value in averages.items()}
 
-print("Averages:")
+torch.save(model.state_dict(), "temp.p")
+print("Model: ", model_name, " | Type: ", model_type, ' | Size (MB):', os.path.getsize("temp.p")/1e6)
+os.remove('temp.p')
+
 for key, value in averages.items():
     print(f"{key}: {value}")
