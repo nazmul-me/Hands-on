@@ -7,8 +7,8 @@ import os
 import json
 from codebleu import calc_codebleu
 
-model_type = "4bit" # 4bit 8bit org dynamic
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+model_type = "org" # 4bit 8bit org dynamic
+device = "cpu"#torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 if model_type == "dynamic":
     device = "cpu"
 
@@ -73,9 +73,9 @@ for entry in res:
 
 averages = {key: value / len(res) for key, value in averages.items()}
 
+for key, value in averages.items():
+    print(f"{key}: {value}")
+
 torch.save(model.state_dict(), "temp.p")
 print("Model: ", model_name, " | Type: ", model_type, ' | Size (MB):', os.path.getsize("temp.p")/1e6)
 os.remove('temp.p')
-
-for key, value in averages.items():
-    print(f"{key}: {value}")

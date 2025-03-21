@@ -4,9 +4,10 @@ import torch
 from torch.utils.data import DataLoader, Dataset
 import numpy as np
 import json
+import os
 from codebleu import calc_codebleu
 
-model_type = "8bit" # 4bit 8bit org dynamic
+model_type = "org" # 4bit 8bit org dynamic
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 if model_type == "dynamic":
     device = "cpu"
@@ -23,7 +24,7 @@ def loadData(filePath):
 filePath = "raw_data.json"
 data = loadData(filePath=filePath)
 # Load model and tokenizer
-model_name = "EleutherAI/gpt-neo-125m"
+model_name = "xhyi/PT_GPTNEO350_ATG" #EleutherAI/gpt-neo-125m
 
 def loadModel(model_name, type):
     if type =="4bit":
@@ -71,6 +72,10 @@ for entry in res:
 
 averages = {key: value / len(res) for key, value in averages.items()}
 
-print("Averages:")
+
+torch.save(model.state_dict(), "temp.p")
+print("Model: ", model_name, " | Type: ", model_type, ' | Size (MB):', os.path.getsize("temp.p")/1e6)
+os.remove('temp.p')
+
 for key, value in averages.items():
     print(f"{key}: {value}")
