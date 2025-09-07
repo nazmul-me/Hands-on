@@ -3,15 +3,16 @@ import transformers
 import torch
 from torch.utils.data import DataLoader, Dataset
 import numpy as np
+import pandas as pd
 import os
 import json
 from codebleu import calc_codebleu
 
-model_type = "org" # 4bit 8bit org dynamic
-device = "cpu"#torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+model_type = "8bit" # 4bit 8bit org dynamic
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 if model_type == "dynamic":
     device = "cpu"
-
+# device = "cpu"
 def loadData(filePath):
     with open(filePath, 'r') as f:
         jsondata = json.load(f)
@@ -25,8 +26,8 @@ filePath = "raw_data.json"
 data = loadData(filePath=filePath)
 # Load model and tokenizer
 # // 70M, 160M, 410M, 1B, 1.4B, 2.8B, 6.9B
-model_name = "EleutherAI/pythia-6.9b"
-
+model_name = "EleutherAI/pythia-12B"
+model_para = model_name.split("/")[1]
 def loadModel(model_name, type):
     if type =="4bit":
         bnb_config = transformers.BitsAndBytesConfig(
@@ -58,23 +59,34 @@ print(len(data))
 model.eval()
 res = []
 for d in data:
-    inputs = tokenizer(d, return_tensors="pt", truncation=True, padding=True).to(device)
-    outputs = model(**inputs, labels=inputs["input_ids"])
-    logits = outputs.logits
-    predicted_token_ids = torch.argmax(logits, dim=-1)
-    generated_code = tokenizer.decode(predicted_token_ids[0], skip_special_tokens=True)
-    result = calc_codebleu([d], [generated_code], lang="python", weights=(0.25, 0.25, 0.25, 0.25), tokenizer=tokenizer)
-    res.append(result)
+    with torch.no_grad():
+        inputs = tokenizer(d, return_tensors="pt", truncation=True, padding=True).to(device)
+        outputs = model(**inputs, labels=inputs["input_ids"])
+        logits = outputs.logits
+        predicted_token_ids = torch.argmax(logits, dim=-1)
+        generated_code = tokenizer.decode(predicted_token_ids[0], skip_special_tokens=True)
+        result = calc_codebleu([d], [generated_code], lang="python", weights=(0.25, 0.25, 0.25, 0.25), tokenizer=tokenizer)
+        res.append(result['codebleu'])
+
+        # Manually delete to free memory
+        del inputs, outputs, logits, predicted_token_ids
+        torch.cuda.empty_cache()
+
 print(len(res))
-averages = {key: 0 for key in res[0].keys()}
-for entry in res:
-    for key, value in entry.items():
-        averages[key] += value
+#save res as csv 
 
-averages = {key: value / len(res) for key, value in averages.items()}
+res_df = pd.DataFrame(res, columns=['codebleu'])
+res_df.to_csv(f"out/{model_para}_{model_type}.csv", index=False)
 
-for key, value in averages.items():
-    print(f"{key}: {value}")
+# averages = {key: 0 for key in res[0].keys()}
+# for entry in res:
+#     for key, value in entry.items():
+#         averages[key] += value
+
+# averages = {key: value / len(res) for key, value in averages.items()}
+
+# for key, value in averages.items():
+#     print(f"{key}: {value}")
 
 torch.save(model.state_dict(), "temp.p")
 print("Model: ", model_name, " | Type: ", model_type, ' | Size (MB):', os.path.getsize("temp.p")/1e6)

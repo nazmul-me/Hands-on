@@ -7,7 +7,7 @@ import os
 import json
 from codebleu import calc_codebleu
 
-model_type = "4bit" # 4bit 8bit org dynamic
+model_type = "dynamic" # 4bit 8bit org dynamic
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 if model_type == "dynamic":
     device = "cpu"
@@ -15,7 +15,6 @@ if model_type == "dynamic":
 def loadData(filePath):
     with open(filePath, 'r') as f:
         jsondata = json.load(f)
-
     # data = jsondata['member']
     data = jsondata['nonmember']
     # data.extend(jsondata['nonmember'])
@@ -23,8 +22,8 @@ def loadData(filePath):
 
 filePath = "raw_data.json"
 data = loadData(filePath=filePath)
-# Load model and tokenizer
-model_name = "Salesforce/codegen-16B-mono"
+# Load model and tokenizer EleutherAI/gpt-neo-1.3B Salesforce/codegen-350M-nl
+model_name = "EleutherAI/gpt-neo-125M"
 
 def loadModel(model_name, type):
     if type =="4bit":
@@ -57,13 +56,18 @@ print(len(data))
 model.eval()
 res = []
 for d in data:
-    inputs = tokenizer(d, return_tensors="pt", truncation=True, padding=True).to(device)
-    outputs = model(**inputs, labels=inputs["input_ids"])
-    logits = outputs.logits
-    predicted_token_ids = torch.argmax(logits, dim=-1)
-    generated_code = tokenizer.decode(predicted_token_ids[0], skip_special_tokens=True)
-    result = calc_codebleu([d], [generated_code], lang="python", weights=(0.25, 0.25, 0.25, 0.25), tokenizer=tokenizer)
-    res.append(result)
+    with torch.no_grad():
+        inputs = tokenizer(d, return_tensors="pt", truncation=True, padding=True).to(device)
+        outputs = model(**inputs, labels=inputs["input_ids"])
+        logits = outputs.logits
+        predicted_token_ids = torch.argmax(logits, dim=-1)
+        generated_code = tokenizer.decode(predicted_token_ids[0], skip_special_tokens=True)
+        result = calc_codebleu([d], [generated_code], lang="python", weights=(0.25, 0.25, 0.25, 0.25), tokenizer=tokenizer)
+        res.append(result['codebleu'])
+
+        # Manually delete to free memory
+        del inputs, outputs, logits, predicted_token_ids
+        torch.cuda.empty_cache()
 print(len(res))
 averages = {key: 0 for key in res[0].keys()}
 for entry in res:
